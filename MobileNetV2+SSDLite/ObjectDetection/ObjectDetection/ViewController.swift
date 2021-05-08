@@ -3,6 +3,8 @@ import CoreML
 import UIKit
 import Vision
 
+import MobileCoreServices
+
 class ViewController: UIViewController {
 
   @IBOutlet var videoPreview: UIView!
@@ -41,7 +43,26 @@ class ViewController: UIViewController {
     super.viewDidLoad()
     setUpBoundingBoxViews()
     setUpCamera()
+    showVideoPicker()
   }
+
+  fileprivate func showVideoPicker() {
+    let imagePickerVC = UIImagePickerController()
+    imagePickerVC.mediaTypes = [kUTTypeMovie] as [String]
+    imagePickerVC.delegate = self
+    present(imagePickerVC, animated: true)
+  }
+}
+
+extension ViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+
+  func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+    let presentingVC = picker.presentingViewController ?? self
+    presentingVC.dismiss(animated: true)
+  }
+}
+
+extension ViewController {
 
   func setUpBoundingBoxViews() {
     for _ in 0..<maxBoundingBoxViews {
