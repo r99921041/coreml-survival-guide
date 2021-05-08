@@ -100,8 +100,16 @@ extension ViewController {
       }
       tuple?.input.append(sample)
     }
-    tuple?.writer.finishWriting {
+    tuple?.writer.finishWriting { [weak self] in
       print("Writing video file done.\nwriter status \(tuple?.writer.status.rawValue)")
+      guard let writer = tuple?.writer else {
+        return
+      }
+      UISaveVideoAtPathToSavedPhotosAlbum(
+        writer.outputURL.path,
+        self,
+        #selector(self?.video(_:didFinishSavingWith:contextInfo:)),
+        nil)
     }
     print("Processing input video done.\nreader.status \(reader.status.rawValue)\nLast frame index \(frameIndex)")
   }
@@ -146,6 +154,23 @@ extension ViewController {
     }
     writer.add(input)
     return (writer, input)
+  }
+
+  @objc fileprivate func video(
+    _ videoPath: String,
+    didFinishSavingWith error: Error?,
+    contextInfo: UnsafeMutableRawPointer?)
+  {
+    print("Copying video at \(videoPath) to Photos finished.")
+    if let error = error {
+      print(error)
+    }
+    do {
+      try FileManager.default.removeItem(atPath: videoPath)
+    } catch {
+      print(error)
+    }
+    print("Removed file at \(videoPath).")
   }
 }
 
