@@ -43,6 +43,20 @@ class ViewController: UIViewController {
   fileprivate var frameIndex = -1
   fileprivate var indexFirstDetectedPerson: Int?
 
+  fileprivate var firstVideoTrack: AVAssetTrack?
+  fileprivate var firstSampleToRecordTime = CMTime.zero
+
+  fileprivate var writeHelper: (writer: AVAssetWriter, input: AVAssetWriterInput)? {
+    if writeHelperBackingStore == nil {
+      writeHelperBackingStore = makeAssetWriter(
+        source: firstVideoTrack,
+        sourceTime: firstSampleToRecordTime)
+    }
+    return writeHelperBackingStore
+  }
+
+  fileprivate var writeHelperBackingStore: (writer: AVAssetWriter, input: AVAssetWriterInput)?
+
   override func viewDidLoad() {
     super.viewDidLoad()
     setUpBoundingBoxViews()
@@ -78,47 +92,41 @@ extension ViewController {
     guard let reader = try? AVAssetReader(asset: asset) else {
       return
     }
-    let videoTracks = asset.tracks.filter({ $0.mediaType == .video })
+    let videoTracks = asset.tracks(withMediaType: .video)
+    firstVideoTrack = videoTracks.first
     let output = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: nil)
     output.videoComposition = AVVideoComposition(propertiesOf: asset)
     if reader.canAdd(output) {
       reader.add(output)
     }
     reader.startReading()
-    let tuple = videoTracks.first.flatMap { makeAssetWriter(source: $0) }
-    if let writer = tuple?.writer {
-      writer.startWriting()
-      writer.startSession(atSourceTime: .zero)
-      print("Start writing")
-    }
     while reader.status == .reading,
           let sample = output.copyNextSampleBuffer() {
       frameIndex += 1
       predict(sampleBuffer: sample)
-      while tuple?.input.isReadyForMoreMediaData == false {
-        sleep(50)
+      let shouldFinishWriting = writeIfNeeded(sample)
+      if shouldFinishWriting {
+        break
       }
-      tuple?.input.append(sample)
     }
-    tuple?.writer.finishWriting { [weak self] in
-      print("Writing video file done.\nwriter status \(tuple?.writer.status.rawValue)")
-      guard let writer = tuple?.writer else {
-        return
-      }
-      UISaveVideoAtPathToSavedPhotosAlbum(
-        writer.outputURL.path,
-        self,
-        #selector(self?.video(_:didFinishSavingWith:contextInfo:)),
-        nil)
+    finishWritingIfNeeded()
+    if reader.status == .reading {
+      reader.cancelReading()
     }
     print("Processing input video done.\nreader.status \(reader.status.rawValue)\nLast frame index \(frameIndex)")
   }
 
-  fileprivate func makeAssetWriter(source track: AVAssetTrack) -> (
+  fileprivate func makeAssetWriter(
+    source track: AVAssetTrack?,
+    sourceTime: CMTime
+  ) -> (
     writer: AVAssetWriter,
     input: AVAssetWriterInput
   )?
   {
+    guard let track = track else {
+      return nil
+    }
     let fileManager = FileManager.default
     let documentFolderURL = (try? fileManager.url(
       for: .documentDirectory,
@@ -153,7 +161,61 @@ extension ViewController {
       return nil
     }
     writer.add(input)
+    writer.startWriting()
+    writer.startSession(atSourceTime: sourceTime)
+    print("Start writing")
     return (writer, input)
+  }
+
+  fileprivate func writeIfNeeded(_ sampleBuffer: CMSampleBuffer) -> Bool {
+    var shouldFinishWriting = false
+    guard let startIndex = indexFirstDetectedPerson,
+          frameIndex >= startIndex else {
+      return shouldFinishWriting
+    }
+
+    if frameIndex == startIndex,
+       #available(iOS 13, *) {
+      firstSampleToRecordTime = sampleBuffer.presentationTimeStamp
+    }
+
+    let frameRate = firstVideoTrack?.nominalFrameRate ?? 0
+    let framesToWrite = Int((numberOfSecondsToRecord * frameRate).rounded(.awayFromZero))
+    let framesToWriteOr1 = max(framesToWrite, 1)
+    let endIndex = startIndex + framesToWriteOr1 - 1
+    guard frameIndex <= endIndex else {
+      return shouldFinishWriting
+    }
+    guard let input = writeHelper?.input else {
+      return shouldFinishWriting
+    }
+    while !(input.isReadyForMoreMediaData) {
+      sleep(50)
+    }
+    input.append(sampleBuffer)
+    if frameIndex == endIndex {
+      shouldFinishWriting = true
+    }
+    return shouldFinishWriting
+  }
+
+  fileprivate func finishWritingIfNeeded() {
+    guard let writer = writeHelper?.writer,
+          writer.status == .writing else {
+      return
+    }
+    writer.finishWriting { [weak self, weak writer] in
+      print("Writing video file done.")
+      guard let writer = writer else {
+        return
+      }
+      print("writer.status \(writer.status.rawValue)")
+      UISaveVideoAtPathToSavedPhotosAlbum(
+        writer.outputURL.path,
+        self,
+        #selector(self?.video(_:didFinishSavingWith:contextInfo:)),
+        nil)
+    }
   }
 
   @objc fileprivate func video(
