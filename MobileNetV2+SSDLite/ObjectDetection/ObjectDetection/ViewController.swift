@@ -80,9 +80,11 @@ extension ViewController {
       reader.add(output)
     }
     reader.startReading()
-    if let sample = output.copyNextSampleBuffer() {
+    while reader.status == .reading,
+          let sample = output.copyNextSampleBuffer() {
       predict(sampleBuffer: sample)
     }
+    print("Processing input video done.\nreader.status \(reader.status.rawValue)")
   }
 }
 
