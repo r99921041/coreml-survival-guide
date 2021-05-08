@@ -59,7 +59,9 @@ extension ViewController: UIImagePickerControllerDelegate, UINavigationControlle
 
   func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
     if let fileURL = info[.mediaURL] as? URL {
-      loadAndProcess(fileURL)
+      DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        self?.loadAndProcess(fileURL)
+      }
     }
     let presentingVC = picker.presentingViewController ?? self
     presentingVC.dismiss(animated: true)
