@@ -217,6 +217,6 @@ extension ViewController {
 
 extension ViewController: VideoCaptureDelegate {
   func videoCapture(_ capture: VideoCapture, didCaptureVideoFrame sampleBuffer: CMSampleBuffer) {
-    predict(sampleBuffer: sampleBuffer)
+//    predict(sampleBuffer: sampleBuffer)
   }
 }
