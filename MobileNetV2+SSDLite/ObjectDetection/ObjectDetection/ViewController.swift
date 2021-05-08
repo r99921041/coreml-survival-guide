@@ -85,12 +85,84 @@ extension ViewController {
       reader.add(output)
     }
     reader.startReading()
+    let tuple = videoTracks.first.flatMap { makeAssetWriter(source: $0) }
+    if let writer = tuple?.writer {
+      writer.startWriting()
+      writer.startSession(atSourceTime: .zero)
+      print("Start writing")
+    }
     while reader.status == .reading,
           let sample = output.copyNextSampleBuffer() {
       frameIndex += 1
       predict(sampleBuffer: sample)
+      while tuple?.input.isReadyForMoreMediaData == false {
+        sleep(50)
+      }
+      tuple?.input.append(sample)
+    }
+    tuple?.writer.finishWriting {
+      print("Writing video file done.\nwriter status \(tuple?.writer.status.rawValue)")
     }
     print("Processing input video done.\nreader.status \(reader.status.rawValue)\nLast frame index \(frameIndex)")
+  }
+
+  fileprivate func makeAssetWriter(source track: AVAssetTrack) -> (
+    writer: AVAssetWriter,
+    input: AVAssetWriterInput
+  )?
+  {
+    let fileManager = FileManager.default
+    let documentFolderURL = (try? fileManager.url(
+      for: .documentDirectory,
+      in: .userDomainMask,
+      appropriateFor: nil,
+      create: true)) ??
+      URL(fileURLWithPath: NSTemporaryDirectory())
+    let dateFormatter = DateFormatter()
+    dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+    let dateNow = Date(timeIntervalSinceNow: 0)
+    let fileName = dateFormatter.string(from: dateNow)
+    let outputFileURL = documentFolderURL
+      .appendingPathComponent(fileName)
+      .appendingPathExtension("mp4")
+    print("outputFileURL \(outputFileURL)")
+    guard let writer = try? AVAssetWriter(outputURL: outputFileURL, fileType: .mp4) else {
+      return nil
+    }
+    var outputSetting: [String : Any] = [AVVideoCodecKey : AVVideoCodecType.h264]
+    if track.preferredTransform.isIdentity ||
+        track.preferredTransform.isRotated180 {
+      outputSetting[AVVideoHeightKey] = track.naturalSize.height
+      outputSetting[AVVideoWidthKey] = track.naturalSize.width
+    } else {
+      outputSetting[AVVideoHeightKey] = track.naturalSize.width
+      outputSetting[AVVideoWidthKey] = track.naturalSize.height
+    }
+    let input = AVAssetWriterInput(
+      mediaType: .video,
+      outputSettings: outputSetting)
+    guard writer.canAdd(input) else {
+      return nil
+    }
+    writer.add(input)
+    return (writer, input)
+  }
+}
+
+extension CGAffineTransform {
+
+  fileprivate var isRotated180: Bool {
+    return a.effectivelyEquals(-1) &&
+      b.effectivelyEquals(0) &&
+      c.effectivelyEquals(0) &&
+      d.effectivelyEquals(-1)
+  }
+}
+
+extension CGFloat {
+
+  fileprivate func effectivelyEquals(_ another: CGFloat) -> Bool {
+    return (abs(self - another) <= 1e-3)
   }
 }
 
