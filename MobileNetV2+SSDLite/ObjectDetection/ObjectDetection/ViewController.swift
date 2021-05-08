@@ -57,11 +57,39 @@ class ViewController: UIViewController {
 
   fileprivate var writeHelperBackingStore: (writer: AVAssetWriter, input: AVAssetWriterInput)?
 
+  fileprivate lazy var loadingIndicator = UIView()
+
   override func viewDidLoad() {
     super.viewDidLoad()
     setUpBoundingBoxViews()
     setUpCamera()
+    setupLoadingIndicator()
     showVideoPicker()
+  }
+
+  fileprivate func setupLoadingIndicator() {
+    guard let view = view else {
+      return
+    }
+    loadingIndicator.backgroundColor = UIColor.black.withAlphaComponent(0.75)
+    loadingIndicator.layer.cornerRadius = 20
+    loadingIndicator.layer.masksToBounds = true
+    let indicator = UIActivityIndicatorView(style: .whiteLarge)
+    indicator.startAnimating()
+
+    loadingIndicator.addSubview(indicator)
+    indicator.translatesAutoresizingMaskIntoConstraints = false
+    indicator.centerXAnchor.constraint(equalTo: loadingIndicator.centerXAnchor).isActive = true
+    indicator.centerYAnchor.constraint(equalTo: loadingIndicator.centerYAnchor).isActive = true
+
+    view.addSubview(loadingIndicator)
+    loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+    loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor).isActive = true
+    loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
+    loadingIndicator.widthAnchor.constraint(equalToConstant: 80).isActive = true
+    loadingIndicator.heightAnchor.constraint(equalToConstant: 80).isActive = true
+
+    loadingIndicator.isHidden = true
   }
 
   fileprivate func showVideoPicker() {
@@ -76,6 +104,7 @@ extension ViewController: UIImagePickerControllerDelegate, UINavigationControlle
 
   func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
     if let fileURL = info[.mediaURL] as? URL {
+      loadingIndicator.isHidden = false
       DispatchQueue.global(qos: .userInitiated).async { [weak self] in
         self?.loadAndProcess(fileURL)
       }
@@ -114,6 +143,9 @@ extension ViewController {
       reader.cancelReading()
     }
     print("Processing input video done.\nreader.status \(reader.status.rawValue)\nLast frame index \(frameIndex)")
+    DispatchQueue.main.async { [weak self] in
+      self?.loadingIndicator.isHidden = true
+    }
   }
 
   fileprivate func makeAssetWriter(
