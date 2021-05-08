@@ -200,7 +200,7 @@ extension ViewController {
   }
 
   fileprivate func finishWritingIfNeeded() {
-    guard let writer = writeHelper?.writer,
+    guard let writer = writeHelperBackingStore?.writer,
           writer.status == .writing else {
       return
     }
