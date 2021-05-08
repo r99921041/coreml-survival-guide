@@ -4,6 +4,7 @@ import UIKit
 import Vision
 
 import MobileCoreServices
+import AVFoundation
 
 class ViewController: UIViewController {
 
@@ -57,8 +58,31 @@ class ViewController: UIViewController {
 extension ViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
 
   func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+    if let fileURL = info[.mediaURL] as? URL {
+      loadAndProcess(fileURL)
+    }
     let presentingVC = picker.presentingViewController ?? self
     presentingVC.dismiss(animated: true)
+  }
+}
+
+extension ViewController {
+
+  fileprivate func loadAndProcess(_ fileURL: URL) {
+    let asset = AVAsset(url: fileURL)
+    guard let reader = try? AVAssetReader(asset: asset) else {
+      return
+    }
+    let videoTracks = asset.tracks.filter({ $0.mediaType == .video })
+    let output = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: nil)
+    output.videoComposition = AVVideoComposition(propertiesOf: asset)
+    if reader.canAdd(output) {
+      reader.add(output)
+    }
+    reader.startReading()
+    if let sample = output.copyNextSampleBuffer() {
+      predict(sampleBuffer: sample)
+    }
   }
 }
 
