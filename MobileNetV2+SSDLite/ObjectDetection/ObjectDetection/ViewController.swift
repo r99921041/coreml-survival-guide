@@ -40,6 +40,9 @@ class ViewController: UIViewController {
   var boundingBoxViews = [BoundingBoxView]()
   var colors: [String: UIColor] = [:]
 
+  fileprivate var frameIndex = -1
+  fileprivate var indexFirstDetectedPerson: Int?
+
   override func viewDidLoad() {
     super.viewDidLoad()
     setUpBoundingBoxViews()
@@ -84,9 +87,10 @@ extension ViewController {
     reader.startReading()
     while reader.status == .reading,
           let sample = output.copyNextSampleBuffer() {
+      frameIndex += 1
       predict(sampleBuffer: sample)
     }
-    print("Processing input video done.\nreader.status \(reader.status.rawValue)")
+    print("Processing input video done.\nreader.status \(reader.status.rawValue)\nLast frame index \(frameIndex)")
   }
 }
 
@@ -168,6 +172,7 @@ extension ViewController {
   }
 
   func processObservations(for request: VNRequest, error: Error?) {
+    detectPerson((request.results as? [VNRecognizedObjectObservation]) ?? [])
     DispatchQueue.main.async {
       if let results = request.results as? [VNRecognizedObjectObservation] {
         self.show(predictions: results)
@@ -176,6 +181,31 @@ extension ViewController {
       }
     }
   }
+
+  fileprivate func detectPerson(_ observations: [VNRecognizedObjectObservation]) {
+    guard indexFirstDetectedPerson == nil else {
+      return
+    }
+    for observation in observations {
+      var idToConfidenceMap = [String : VNConfidence]()
+      for label in observation.labels {
+        idToConfidenceMap[label.identifier] = label.confidence
+      }
+      guard let confidence = idToConfidenceMap[personID],
+            confidence >= minConfidenceToStartRecording else {
+        continue
+      }
+      indexFirstDetectedPerson = frameIndex
+      print("Start recording at frame index \(frameIndex).")
+    }
+  }
+}
+
+fileprivate let personID = "person"
+fileprivate let minConfidenceToStartRecording: VNConfidence = 0.9
+fileprivate let numberOfSecondsToRecord: Float = 10
+
+extension ViewController {
 
   func show(predictions: [VNRecognizedObjectObservation]) {
     for i in 0..<boundingBoxViews.count {
