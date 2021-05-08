@@ -42,6 +42,7 @@ class ViewController: UIViewController {
 
   fileprivate var frameIndex = -1
   fileprivate var indexFirstDetectedPerson: Int?
+  fileprivate var indexLastDetectedPerson: Int?
 
   fileprivate var firstVideoTrack: AVAssetTrack?
   fileprivate var firstSampleToRecordTime = CMTime.zero
@@ -218,6 +219,18 @@ extension ViewController {
     guard frameIndex <= endIndex else {
       return shouldFinishWriting
     }
+
+    var endIndexWithoutPerson: Int?
+    if let lastIndexWithPerson = indexLastDetectedPerson {
+      let framesToWriteWithoutPerson = Int((numberOfSecondsToRecordWithoutPerson * frameRate).rounded(.awayFromZero))
+      let endIndex = lastIndexWithPerson + framesToWriteWithoutPerson
+      endIndexWithoutPerson = endIndex
+      guard frameIndex <= endIndex else {
+        shouldFinishWriting = true
+        return shouldFinishWriting
+      }
+    }
+
     guard let input = writeHelper?.input else {
       return shouldFinishWriting
     }
@@ -225,7 +238,12 @@ extension ViewController {
       sleep(50)
     }
     input.append(sampleBuffer)
+
     if frameIndex == endIndex {
+      shouldFinishWriting = true
+    }
+    else if let index = endIndexWithoutPerson,
+            frameIndex == index {
       shouldFinishWriting = true
     }
     return shouldFinishWriting
@@ -374,9 +392,6 @@ extension ViewController {
   }
 
   fileprivate func detectPerson(_ observations: [VNRecognizedObjectObservation]) {
-    guard indexFirstDetectedPerson == nil else {
-      return
-    }
     for observation in observations {
       var idToConfidenceMap = [String : VNConfidence]()
       for label in observation.labels {
@@ -386,8 +401,11 @@ extension ViewController {
             confidence >= minConfidenceToStartRecording else {
         continue
       }
-      indexFirstDetectedPerson = frameIndex
-      print("Start recording at frame index \(frameIndex).")
+      if indexFirstDetectedPerson == nil {
+        indexFirstDetectedPerson = frameIndex
+        print("Start recording at frame index \(frameIndex).")
+      }
+      indexLastDetectedPerson = frameIndex
     }
   }
 }
@@ -395,6 +413,7 @@ extension ViewController {
 fileprivate let personID = "person"
 fileprivate let minConfidenceToStartRecording: VNConfidence = 0.9
 fileprivate let numberOfSecondsToRecord: Float = 10
+fileprivate let numberOfSecondsToRecordWithoutPerson: Float = 5
 
 extension ViewController {
 

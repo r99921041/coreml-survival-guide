@@ -9,5 +9,5 @@ The results of object detection is available from the existing processObservatio
 By the way, although the VNRequest API appears asynchronous due to completion handler, the documentation for the perform(_:) method of VNImageRequestHandler says that "The function returns after all requests have either completed or failed." and I verified that they are actually executed synchronously.
 
 After the frame data has been processed for object detection, the data is fed into an AVAssetWriterInput added to an AVAssetWriter to record an output video if needed.
-Reading and writing the video files continues until 10 seconds of video is recorded (by counting the number of frames and frame rate) or if the end of the input video is reached.
+Reading and writing the video files continues until 10 seconds of video is recorded (by counting the number of frames and frame rate), 5 seconds have passed since last detected person, or the end of the input video is reached.
 Finally, the output video is moved from its temporary location in the app's Documents folder to the user's photo library using UISaveVideoAtPathToSavedPhotosAlbum(_:_:_:_:)
