@@ -136,7 +136,7 @@ extension ViewController {
       predict(sampleBuffer: sample)
       let shouldFinishWriting = writeIfNeeded(sample)
       if shouldFinishWriting {
-        break
+        finishWritingIfNeeded()
       }
     }
     finishWritingIfNeeded()
@@ -254,11 +254,8 @@ extension ViewController {
           writer.status == .writing else {
       return
     }
-    writer.finishWriting { [weak self, weak writer] in
+    writer.finishWriting { [weak self] in
       print("Writing video file done.")
-      guard let writer = writer else {
-        return
-      }
       print("writer.status \(writer.status.rawValue)")
       UISaveVideoAtPathToSavedPhotosAlbum(
         writer.outputURL.path,
@@ -266,6 +263,7 @@ extension ViewController {
         #selector(self?.video(_:didFinishSavingWith:contextInfo:)),
         nil)
     }
+    resetWriteRelated()
   }
 
   @objc fileprivate func video(
@@ -283,6 +281,13 @@ extension ViewController {
       print(error)
     }
     print("Removed file at \(videoPath).")
+  }
+
+  fileprivate func resetWriteRelated() {
+    indexFirstDetectedPerson = nil
+    indexLastDetectedPerson = nil
+    firstSampleToRecordTime = CMTime.zero
+    writeHelperBackingStore = nil
   }
 }
 
